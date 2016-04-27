@@ -1,8 +1,13 @@
-require_relative 'sql_ole'
-
+##
 # defines an ole connection to sql server
 class SQLConnection
-  attr_reader :connection_hash, :connection_params, :ole_connection
+  ##
+  # returns a hash containing the connection parameters
+  attr_reader :connection_hash
+
+  attr_reader :connection_params
+
+  attr_reader :ole_connection
  
   # valid connection states
   STATECLOSED = 0
@@ -17,42 +22,48 @@ class SQLConnection
   # creates an instance of an ole connection and configures the connection parameters
   def initialize(connection_hash)
     @ole_connection = SQLOLE.get_connection
-    @connection_hash = connection_hash
+    @connection_hash = connection_hash || {}
+# TODO: move this base hash to the non-public method and return the full hash
+#       look at refactoring the send method goodies
     @connection_params =
     {
       :provider => "Provider=SQLOLEDB.1",
       :library => "Network Library=dbmssocn"
     }
-    set_connection_params(connection_hash)
+    set_connection_params(@connection_hash)
   end
  
+  ##
   # closes the ole connection
   def close
     @ole_connection.Close
   end
  
+  ##
   # returns the connection state code
   def connection_state_code
     conn_state = @ole_connection.State
-   
+
     STATECODES.each do |value|
-      return value if ((conn_state & value) == value)
+      return value if (((conn_state & value) == value && value > 0) || (conn_state == value))
     end
  
     return nil
   end
  
+  ##
   # returns the connection state name
   def connection_state_name
     conn_state = @ole_connection.State
    
     STATECODES.each_with_index do |value, index|
-      return STATENAMES[index] if ((conn_state & value) == value)
+      return STATENAMES[index] if (((conn_state & value) == value && value > 0) || (conn_state == value))
     end
  
     return 'Unknown'
   end
  
+  ##
   # returns a hash of connection states
   def connection_states
     hash = {}
@@ -65,11 +76,13 @@ class SQLConnection
     return hash
   end
  
+  ##
   # builds a connection string from the connection params
   def connection_string
     return @connection_params.values.compact.join(';')
   end
  
+  ##
   # shows help for this object
   def self.help(command=nil)
     if command.nil? || ['initialize', 'new'].include?(command.to_s)
@@ -86,12 +99,11 @@ class SQLConnection
     end
   end
  
+  ##
   # opens the ole connection
   def open
     @ole_connection.Open(connection_string)
   end
- 
-  # TODO: ensure that disposing of an instance also disposes of child objects
  
   protected
  
@@ -135,25 +147,13 @@ class SQLConnection
     # use each base connection param
     base_params.each do |param_name|
       parm_name = param_name.to_sym
+
       # compose the method name that corresponds to the parameter
       method_name = "get_#{param_name}_option".to_sym
+
       # call the method to get the formatted param
       @connection_params[parm_name] = send(method_name, connection_hash[parm_name])
     end
   end
  
-end
- 
-# this block only executes when the script is run directly from the command line
-if $0 == __FILE__
-  # some example code
-  SQLConnection.help
-  hash = {instance_name: 'HQ1SVDSQL002', trusted_connection: true, persist_security_info: true}
-  conn = SQLConnection.new(hash)
-  puts conn.connection_string
-  conn.open
-  puts conn.connection_state_name
-  conn.close
-  puts conn.connection_state_name
-  puts conn.connection_states.inspect
 end
